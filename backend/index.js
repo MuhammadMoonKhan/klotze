@@ -92,17 +92,11 @@ app.post('/extract', async (req, res) => {
     let browser = null;
 
     try {
-        browser = await puppeteer.launch({
-            headless: true,
-            args: [
-              '--no-sandbox',
-              '--disable-setuid-sandbox',
-              '--disable-dev-shm-usage',
-              '--disable-accelerated-2d-canvas',
-              '--disable-gpu',
-            ],
-            executablePath: puppeteer.executablePath(),
-        });
+      browser = await puppeteer.launch({
+  headless: true,
+  args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  executablePath: process.env.PUPPETEER_EXECUTABLE_PATH, // Use the path set in the Dockerfile
+});
 
         const page = await browser.newPage();
         await page.setViewport({ width: 1920, height: 1080 });
