@@ -1,0 +1,9 @@
+{
+    "build": {
+      "env": {
+        "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD": "true",
+        "CHROME_BIN": "/usr/bin/google-chrome-stable"
+      }
+    }
+  }
+  
