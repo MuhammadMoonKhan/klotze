@@ -101,7 +101,7 @@ app.post('/extract', async (req, res) => {
  browser = await puppeteer.launch({
   headless: true,
   args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  executablePath: /usr/bin/google-chrome-stable, // Use the path set in the Dockerfile
+  executablePath: '/usr/bin/google-chrome-stable', // Use the path set in the Dockerfile
 });
 
 
