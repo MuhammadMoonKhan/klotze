@@ -1,4 +1,3 @@
-// Import packages
 import express from 'express';
 import cors from 'cors';
 import puppeteer from 'puppeteer';
@@ -7,8 +6,8 @@ import fs from 'fs';
 import axios from 'axios';
 import { fileURLToPath } from 'url';
 import ffmpeg from 'fluent-ffmpeg';
-import ffmpegPath from 'ffmpeg-static'
-import  request  from 'request';
+import ffmpegPath from 'ffmpeg-static';
+import request from 'request';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,9 +16,7 @@ const app = express();
 
 // Middleware
 app.use(express.json());
-app.use(cors({
-  origin:'*'
-}));
+app.use(cors({ origin: '*' }));
 app.use(express.urlencoded({ extended: true }));
 
 const port = process.env.PORT || 9090;
@@ -29,108 +26,95 @@ const outputDir = path.join(__dirname, 'output');
 const fontsDir = path.join(__dirname, 'fonts');
 const tempDir = path.join(__dirname, 'temp');
 
+// Ensure directories exist
 [outputDir, fontsDir, tempDir].forEach((dir) => {
-    if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-    }
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
 });
 
-// Add root route
+// Routes
 app.get('/', (req, res) => {
-    res.json({
-        message: 'Welcome to the API',
-        endpoints: {
-            health: '/health',
-            extract: '/extract',
-            generateVideo: '/generate-video',
-            proxy: '/proxy'
-        }
-    });
+  res.json({
+    message: 'Welcome to the API',
+    endpoints: {
+      health: '/health',
+      extract: '/extract',
+      generateVideo: '/generate-video',
+      proxy: '/proxy',
+    },
+  });
 });
-
-// Rest of your existing code...
-app.use('/output', express.static(outputDir));
-
-const systemFontPath = process.platform === 'win32' 
-    ? 'C:\\Windows\\Fonts\\arial.ttf'
-    : '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf';
 
 const cleanup = (files) => {
-    files.forEach((file) => {
-        if (fs.existsSync(file)) {
-            try {
-                fs.unlinkSync(file);
-            } catch (error) {
-                console.error(`Error deleting file ${file}:`, error);
-            }
-        }
-    });
+  files.forEach((file) => {
+    if (fs.existsSync(file)) {
+      try {
+        fs.unlinkSync(file);
+      } catch (error) {
+        console.error(`Error deleting file ${file}:`, error);
+      }
+    }
+  });
 };
 
 async function downloadImage(url, outputPath) {
-    try {
-        const response = await axios({
-            url,
-            responseType: 'stream',
-            timeout: 15000,
-        });
+  try {
+    const response = await axios({
+      url,
+      responseType: 'stream',
+      timeout: 15000,
+    });
 
-        const writer = fs.createWriteStream(outputPath);
-        response.data.pipe(writer);
+    const writer = fs.createWriteStream(outputPath);
+    response.data.pipe(writer);
 
-        return new Promise((resolve, reject) => {
-            writer.on('finish', resolve);
-            writer.on('error', reject);
-        });
-    } catch (error) {
-        throw new Error(`Failed to download image: ${error.message}`);
-    }
+    return new Promise((resolve, reject) => {
+      writer.on('finish', resolve);
+      writer.on('error', reject);
+    });
+  } catch (error) {
+    throw new Error(`Failed to download image: ${error.message}`);
+  }
 }
 
 app.post('/extract', async (req, res) => {
-    const { url } = req.body;
-    let browser = null;
+  const { url } = req.body;
+  let browser = null;
 
-    try {
-//       browser = await puppeteer.launch({
-//   headless: true,
-//   args: ['--no-sandbox', '--disable-setuid-sandbox'],
-//   executablePath: process.env.PUPPETEER_EXECUTABLE_PATH, // Use the path set in the Dockerfile
-// });
+  try {
+    browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH, // Use Docker-configured Chromium
+    });
 
- browser = await puppeteer.launch({
-  headless: true,
-  args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  executablePath: '/usr/bin/google-chrome-stable', // Use the path set in the Dockerfile
-});
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1920, height: 1080 });
+    await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 });
 
+    const result = await page.evaluate(() => {
+      const image = document.querySelector('a.single.singleC img');
+      const imageSrc = image ? image.src : null;
 
-        const page = await browser.newPage();
-        await page.setViewport({ width: 1920, height: 1080 });
-        await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 });
+      const rightDiv = document.querySelector('div.right');
+      const pTags = rightDiv ? rightDiv.querySelectorAll('h1,p') : [];
+      const pTexts = Array.from(pTags).map((p) => p.innerText.trim());
 
-        const result = await page.evaluate(() => {
-            const image = document.querySelector('a.single.singleC img');
-            const imageSrc = image ? image.src : null;
+      return { imageSrc, pTexts };
+    });
 
-            const rightDiv = document.querySelector('div.right');
-            const pTags = rightDiv ? rightDiv.querySelectorAll('h1,p') : [];
-            const pTexts = Array.from(pTags).map((p) => p.innerText.trim());
-
-            return { imageSrc, pTexts };
-        });
-
-        if (!result.imageSrc) {
-            throw new Error('No image found on the page');
-        }
-
-        res.json(result);
-    } catch (error) {
-        console.error('Scraping error:', error);
-        res.status(500).json({ error: error.message });
-    } finally {
-        if (browser) await browser.close();
+    if (!result.imageSrc) {
+      throw new Error('No image found on the page');
     }
+
+    res.json(result);
+  } catch (error) {
+    console.error('Scraping error:', error);
+    res.status(500).json({ error: error.message });
+  } finally {
+    if (browser) await browser.close();
+  }
 });
 
 app.post('/generate-video', async (req, res) => {
@@ -176,25 +160,25 @@ app.post('/generate-video', async (req, res) => {
 });
 
 app.get('/health', (req, res) => {
-    res.json({ status: 'OK', timestamp: new Date().toISOString() });
+  res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-app.get("/proxy", (req, res) => {
+app.get('/proxy', (req, res) => {
   const imageUrl = req.query.url;
 
   if (!imageUrl) {
-    return res.status(400).send("Image URL is required");
+    return res.status(400).send('Image URL is required');
   }
 
   request
     .get(imageUrl)
-    .on("error", (err) => {
+    .on('error', (err) => {
       console.error(err);
-      res.status(500).send("Error fetching image");
+      res.status(500).send('Error fetching image');
     })
     .pipe(res);
 });
 
 app.listen(port, () => {
-    console.log(`Server running on port ${port}`);
+  console.log(`Server running on port ${port}`);
 });
