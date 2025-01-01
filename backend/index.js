@@ -9,17 +9,10 @@ import { fileURLToPath } from 'url';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegPath from 'ffmpeg-static'
 import  request  from 'request';
-// import dotenv from 'dotenv';
 
-
-// Load environment variables
-// dotenv.config();
-
-// Get the directory name
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Initialize Express app
 const app = express();
 
 // Middleware
@@ -42,15 +35,26 @@ const tempDir = path.join(__dirname, 'temp');
     }
 });
 
-// Serve static files
+// Add root route
+app.get('/', (req, res) => {
+    res.json({
+        message: 'Welcome to the API',
+        endpoints: {
+            health: '/health',
+            extract: '/extract',
+            generateVideo: '/generate-video',
+            proxy: '/proxy'
+        }
+    });
+});
+
+// Rest of your existing code...
 app.use('/output', express.static(outputDir));
 
-// Font configuration
 const systemFontPath = process.platform === 'win32' 
     ? 'C:\\Windows\\Fonts\\arial.ttf'
     : '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf';
 
-// Helper: Cleanup function for temporary files
 const cleanup = (files) => {
     files.forEach((file) => {
         if (fs.existsSync(file)) {
@@ -63,7 +67,6 @@ const cleanup = (files) => {
     });
 };
 
-// Helper: Download image
 async function downloadImage(url, outputPath) {
     try {
         const response = await axios({
@@ -84,7 +87,6 @@ async function downloadImage(url, outputPath) {
     }
 }
 
-// Route: Extract data
 app.post('/extract', async (req, res) => {
     const { url } = req.body;
     let browser = null;
@@ -130,11 +132,6 @@ app.post('/extract', async (req, res) => {
     }
 });
 
-// Route: Generate video
-
-// import ffmpeg from 'fluent-ffmpeg';
-; // Import the static FFmpeg binary
-
 app.post('/generate-video', async (req, res) => {
   const { imageSrc, pTexts } = req.body;
   const timestamp = Date.now();
@@ -142,33 +139,15 @@ app.post('/generate-video', async (req, res) => {
   const videoFilePath = path.join(outputDir, `output_video-${timestamp}.mp4`);
 
   try {
-    // Download the image
     await downloadImage(imageSrc, imagePath);
 
-    // Configure Fluent-FFmpeg to use the static FFmpeg binary
     ffmpeg.setFfmpegPath(ffmpegPath);
 
-    // Generate the video using FFmpeg
     const ffmpegCommand = ffmpeg()
       .addInput(imagePath)
-      .loop(5) // Loop the image for 5 seconds
-    //   .videoFilters(
-    //     pTexts.map((text, index) => ({
-    //       filter: 'drawtext',
-    //       drawtext:'',
-          
-    //       options: {
-    //         fontfile: systemFontPath,
-           
-    //         fontsize: 24,
-    //         fontcolor: 'white',
-    //         x: 50,
-    //         y: 50 + index * 40,
-    //       },
-    //     }))
-    //   )
-      .outputOptions('-pix_fmt yuv420p') // Ensure compatibility
-      .size('1280x720') // Resize to 720p
+      .loop(5)
+      .outputOptions('-pix_fmt yuv420p')
+      .size('1280x720')
       .output(videoFilePath)
       .on('end', () => {
         console.log('Video created successfully');
@@ -178,7 +157,6 @@ app.post('/generate-video', async (req, res) => {
             res.status(500).json({ error: 'Error sending video file' });
           }
 
-          // Cleanup temporary files
           setTimeout(() => cleanup([imagePath, videoFilePath]), 1000);
         });
       })
@@ -196,20 +174,9 @@ app.post('/generate-video', async (req, res) => {
   }
 });
 
-
-
-// Health check
 app.get('/health', (req, res) => {
     res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
-
-// Start server
-app.listen(port, () => {
-    console.log(`Server running on port ${port}`);
-});
-
-
-
 
 app.get("/proxy", (req, res) => {
   const imageUrl = req.query.url;
@@ -225,4 +192,8 @@ app.get("/proxy", (req, res) => {
       res.status(500).send("Error fetching image");
     })
     .pipe(res);
+});
+
+app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
 });
