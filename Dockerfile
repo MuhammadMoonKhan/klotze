@@ -9,10 +9,13 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
 WORKDIR /usr/src/app
 
 # Copy package.json and package-lock.json (if available) into the container
-COPY package*.json ./
+COPY package.json ./
+COPY package-lock.json ./
+
+# Debug step to verify files
+RUN ls -l /usr/src/app
 
 # Install dependencies
-# Use npm ci if package-lock.json is present, otherwise fallback to npm install
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 # Copy the rest of the application code into the container
